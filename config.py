@@ -11,7 +11,7 @@ def _require(key: str) -> str:
 
 SENDER_EMAIL = _require("SENDER_EMAIL")
 SENDER_APP_PASSWORD = _require("SENDER_APP_PASSWORD")
-RECIPIENT_EMAIL = _require("RECIPIENT_EMAIL")
+RECIPIENT_EMAILS = [e.strip() for e in _require("RECIPIENT_EMAILS").split(",")]
 GEMINI_API_KEY = _require("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 LOCAL_TIMEZONE = os.getenv("LOCAL_TIMEZONE", "Asia/Dhaka")
