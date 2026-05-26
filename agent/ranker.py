@@ -8,29 +8,24 @@ logger = logging.getLogger(__name__)
 
 _client = genai.Client(api_key=config.GEMINI_API_KEY)
 
-_RANKING_PROMPT = """You are a senior international news editor. From the numbered list below, select the {top_n} most globally important news items.
+_RANKING_PROMPT = """You are a news editor. From the numbered list below, select the {top_n} most important stories.
 
-Priority order:
-1. Humanitarian crises (famine, displacement, civilian casualties, war crimes)
-2. Active wars and military conflicts
-3. Major political events (elections, coups, assassinations, diplomatic crises)
-4. Bangladesh news (any significant domestic event)
-5. Global economy, climate disasters, and health emergencies
+Pick based on: significance, impact, recency, and reader interest.
 
-Return ONLY a JSON array of the item numbers in order of importance (most important first).
-Example: [3, 17, 2, 9, 1, 14, 7, 22, 5, 11]
+Return ONLY a JSON array of item numbers in order of importance (most important first).
+Example: [3, 0, 4, 1, 2]
 
 ARTICLES:
 {articles_block}
 
-Return only the JSON array. No explanation, no other text."""
+Return only the JSON array. No explanation."""
 
 
 def _build_articles_block(articles: list[dict]) -> str:
     lines = []
     for i, a in enumerate(articles):
         snippet = a.get("summary", "")[:120].replace("\n", " ")
-        line = f"{i}. [{a['source_name']}] {a['title']}"
+        line = f"{i}. {a['title']}"
         if snippet:
             line += f" — {snippet}"
         lines.append(line)
@@ -48,12 +43,15 @@ def _parse_ranked_indices(raw: str, max_index: int) -> list[int]:
         return []
 
 
-def rank_articles(articles: list[dict]) -> list[dict]:
-    if len(articles) <= config.TOP_N:
+def _rank_group(articles: list[dict], top_n: int) -> list[dict]:
+    """Rank a group of articles with Gemini and return the top_n."""
+    if not articles:
+        return []
+    if len(articles) <= top_n:
         return articles
 
     articles_block = _build_articles_block(articles)
-    prompt = _RANKING_PROMPT.format(top_n=config.TOP_N, articles_block=articles_block)
+    prompt = _RANKING_PROMPT.format(top_n=top_n, articles_block=articles_block)
 
     try:
         response = _client.models.generate_content(
@@ -61,18 +59,44 @@ def rank_articles(articles: list[dict]) -> list[dict]:
             contents=prompt,
         )
         raw = response.text.strip()
-        logger.debug(f"Gemini ranking response: {raw}")
-
+        logger.debug(f"Gemini response: {raw}")
         indices = _parse_ranked_indices(raw, max_index=len(articles) - 1)
-
-        if not indices:
-            logger.warning("Gemini ranking parse failed — falling back to first 10 articles")
-            return articles[: config.TOP_N]
-
-        ranked = [articles[i] for i in indices if i < len(articles)]
-        logger.info(f"Ranking complete: selected {len(ranked)} articles")
-        return ranked[: config.TOP_N]
-
+        if indices:
+            ranked = [articles[i] for i in indices if i < len(articles)]
+            logger.info(f"Gemini ranked {len(ranked)} articles from {articles[0].get('source_name', '?')}")
+            return ranked[:top_n]
     except Exception as e:
-        logger.error(f"Gemini ranking failed: {e} — falling back to first 10 articles")
-        return articles[: config.TOP_N]
+        logger.error(f"Gemini ranking failed: {e} — using first {top_n}")
+
+    return articles[:top_n]
+
+
+def rank_articles(articles: list[dict]) -> list[dict]:
+    # Group articles by source
+    by_source: dict[str, list[dict]] = {}
+    for a in articles:
+        src = a.get("source_name", "Unknown")
+        by_source.setdefault(src, []).append(a)
+
+    sources = list(by_source.keys())
+    n_sources = len(sources)
+
+    if n_sources == 0:
+        return []
+
+    # Equal slots per source (floor division, then give extras to first sources)
+    slots_per_source = config.TOP_N // n_sources
+    extra = config.TOP_N % n_sources
+
+    logger.info(f"Ranking {n_sources} sources equally — {slots_per_source} slots each (±{extra} extra)")
+
+    result = []
+    for idx, source in enumerate(sources):
+        group = by_source[source]
+        slots = slots_per_source + (1 if idx < extra else 0)
+        ranked = _rank_group(group, slots)
+        logger.info(f"  {source}: picked {len(ranked)}/{len(group)} articles")
+        result.extend(ranked)
+
+    logger.info(f"Ranking complete: {len(result)} total articles across {n_sources} sources")
+    return result

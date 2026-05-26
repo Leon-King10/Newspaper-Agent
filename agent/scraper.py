@@ -1,6 +1,8 @@
 import logging
 import re
 import feedparser
+import requests
+from bs4 import BeautifulSoup
 import config
 
 logger = logging.getLogger(__name__)
@@ -8,6 +10,25 @@ logger = logging.getLogger(__name__)
 
 def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text or "").strip()
+
+
+def _fetch_og_image(url: str) -> str:
+    """Fetch the og:image URL from an article page. Returns empty string on failure."""
+    if not url:
+        return ""
+    try:
+        resp = requests.get(url, timeout=5, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)"
+        })
+        if resp.status_code != 200:
+            return ""
+        soup = BeautifulSoup(resp.text, "html.parser")
+        og = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "twitter:image"})
+        if og and og.get("content"):
+            return og["content"].strip()
+    except Exception:
+        pass
+    return ""
 
 
 def _fetch_rss(source: dict) -> list[dict]:
@@ -23,8 +44,11 @@ def _fetch_rss(source: dict) -> list[dict]:
             if len(feed.entries) < 5:
                 continue
 
+            entries = feed.entries[: config.ARTICLES_PER_SOURCE]
+
+            # Build base article dicts first
             articles = []
-            for entry in feed.entries[: config.ARTICLES_PER_SOURCE]:
+            for entry in entries:
                 title = _strip_html(entry.get("title", "")).strip()
                 summary = _strip_html(entry.get("summary") or entry.get("description") or "")
                 if not title:
@@ -35,11 +59,25 @@ def _fetch_rss(source: dict) -> list[dict]:
                         "summary": summary[:300],
                         "url": entry.get("link", ""),
                         "source_name": source["name"],
+                        "image_url": "",  # filled below
                     }
                 )
 
+            # Fetch og:image for all articles in parallel
             if articles:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                article_urls = [a["url"] for a in articles]
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    futures = {pool.submit(_fetch_og_image, u): i for i, u in enumerate(article_urls)}
+                    for future in as_completed(futures):
+                        idx = futures[future]
+                        try:
+                            articles[idx]["image_url"] = future.result()
+                        except Exception:
+                            pass
                 logger.info(f"RSS OK — {source['name']}: {len(articles)} articles from {url}")
+                imgs = sum(1 for a in articles if a["image_url"])
+                logger.info(f"  Images found: {imgs}/{len(articles)}")
                 return articles
 
         except Exception as e:
