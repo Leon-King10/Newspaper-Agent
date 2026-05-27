@@ -9,9 +9,15 @@ def _require(key: str) -> str:
         raise ValueError(f"Missing required environment variable: {key}")
     return val
 
+def _require_either(key1: str, key2: str) -> str:
+    val = os.getenv(key1) or os.getenv(key2)
+    if not val:
+        raise ValueError(f"Missing required environment variable: {key1} or {key2}")
+    return val
+
 SENDER_EMAIL = _require("SENDER_EMAIL")
 SENDER_APP_PASSWORD = _require("SENDER_APP_PASSWORD")
-RECIPIENT_EMAILS = [e.strip() for e in _require("RECIPIENT_EMAILS").split(",")]
+RECIPIENT_EMAILS = [e.strip() for e in _require_either("RECIPIENT_EMAILS", "RECIPIENT_EMAIL").split(",")]
 GEMINI_API_KEY = _require("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 LOCAL_TIMEZONE = os.getenv("LOCAL_TIMEZONE", "Asia/Dhaka")
