@@ -24,3 +24,7 @@ env/
 # Logs
 *.log
 logs/
+
+# Internal planning notes
+implementation_plan.md
+session handoff/
