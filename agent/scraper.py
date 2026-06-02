@@ -44,6 +44,36 @@ def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text or "").strip()
 
 
+_URL_DATE_RE = re.compile(r"/(20\d\d)/(\d{1,2})/(\d{1,2})/")
+
+
+def _article_datetime(article, url: str) -> datetime | None:
+    """Best-effort publish time for an HTML-scraped article, as aware UTC.
+
+    Tries newspaper's parsed ``publish_date`` first, then a ``/YYYY/M/D/`` path
+    in the URL. Returns None when no date can be determined — callers should
+    treat undated HTML articles as unsafe (they may be stale homepage links).
+    """
+    pub = getattr(article, "publish_date", None)
+    if pub is not None:
+        try:
+            if pub.tzinfo is None:
+                pub = pub.replace(tzinfo=timezone.utc)
+            return pub.astimezone(timezone.utc)
+        except (ValueError, OverflowError, AttributeError):
+            pass
+
+    m = _URL_DATE_RE.search(url or "")
+    if m:
+        try:
+            y, mo, d = (int(g) for g in m.groups())
+            return datetime(y, mo, d, tzinfo=timezone.utc)
+        except (ValueError, OverflowError):
+            pass
+
+    return None
+
+
 def _fetch_og_image(url: str) -> str:
     """Fetch the og:image URL from an article page. Returns empty string on failure."""
     if not url:
@@ -137,7 +167,8 @@ def _fetch_rss(source: dict, window: tuple[datetime, datetime]) -> list[dict]:
     return articles
 
 
-def _fetch_html(source: dict) -> list[dict]:
+def _fetch_html(source: dict, window: tuple[datetime, datetime]) -> list[dict]:
+    start, end = window
     try:
         import newspaper
 
@@ -148,25 +179,47 @@ def _fetch_html(source: dict) -> list[dict]:
             number_threads=4,
         )
         articles = []
-        for article in paper.articles[: config.ARTICLES_PER_SOURCE]:
+        seen_urls: set[str] = set()
+        stale_count = 0
+        undated_count = 0
+        # Scan more than we need — many will be dropped as undated/out-of-window.
+        for article in paper.articles[: config.ARTICLES_PER_SOURCE * 4]:
+            if len(articles) >= config.ARTICLES_PER_SOURCE:
+                break
             try:
+                if article.url in seen_urls:
+                    continue
                 article.download()
                 article.parse()
                 if not article.title:
                     continue
+
+                published = _article_datetime(article, article.url)
+                if published is None:
+                    undated_count += 1
+                    continue
+                if not (start <= published < end):
+                    stale_count += 1
+                    continue
+
+                seen_urls.add(article.url)
                 articles.append(
                     {
                         "title": article.title.strip(),
                         "summary": (article.text or "")[:300],
                         "url": article.url,
                         "source_name": source["name"],
+                        "published": published,
                         "image_url": "",
                     }
                 )
             except Exception:
                 continue
 
-        logger.info(f"HTML fallback — {source['name']}: {len(articles)} articles")
+        logger.info(
+            f"HTML fallback — {source['name']}: {len(articles)} in-window articles "
+            f"(dropped {stale_count} out-of-window, {undated_count} undated)"
+        )
 
         if articles:
             from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -206,7 +259,7 @@ def fetch_all_articles() -> list[dict]:
         articles = _fetch_rss(source, window)
         if not articles:
             logger.warning(f"No in-window RSS articles for {source['name']}, trying HTML fallback")
-            articles = _fetch_html(source)
+            articles = _fetch_html(source, window)
 
         all_articles.extend(articles)
 
