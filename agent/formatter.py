@@ -6,7 +6,9 @@ import config
 # Map source names to accent colors and flag/icons
 _SOURCE_STYLES = {
     "Al Jazeera":   {"color": "#e8b84b", "bg": "#2a2200", "label": "🌍 International"},
+    "Reuters":      {"color": "#ff8a4c", "bg": "#2a1400", "label": "🌍 International"},
     "Daily Star":   {"color": "#4fc3f7", "bg": "#001a2e", "label": "🇧🇩 Bangladesh"},
+    "Prothom Alo":  {"color": "#34d399", "bg": "#04261c", "label": "🇧🇩 Bangladesh"},
 }
 _DEFAULT_STYLE = {"color": "#a78bfa", "bg": "#1a0a2e", "label": "📰 News"}
 

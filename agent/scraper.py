@@ -44,6 +44,46 @@ def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text or "").strip()
 
 
+def _title_tokens(title: str) -> set[str]:
+    """Significant words of a headline, for cross-source duplicate detection."""
+    words = re.sub(r"[^a-z0-9 ]", " ", (title or "").lower()).split()
+    return {w for w in words if len(w) > 2}
+
+
+def _dedupe_cross_source(articles: list[dict]) -> list[dict]:
+    """Drop articles whose headline closely matches one already kept.
+
+    Different outlets often run the same wire story. We keep the first
+    occurrence (earlier sources in config.NEWS_SOURCES win) and discard
+    later near-duplicates. Two headlines are treated as the same story when
+    they share enough significant words (Jaccard >= 0.6 and >= 3 shared words).
+    """
+    kept: list[dict] = []
+    kept_tokens: list[set[str]] = []
+    dropped = 0
+
+    for art in articles:
+        tokens = _title_tokens(art["title"])
+        is_dup = False
+        for other in kept_tokens:
+            shared = tokens & other
+            union = tokens | other
+            if not union:
+                continue
+            if len(shared) >= 3 and len(shared) / len(union) >= 0.6:
+                is_dup = True
+                break
+        if is_dup:
+            dropped += 1
+            continue
+        kept.append(art)
+        kept_tokens.append(tokens)
+
+    if dropped:
+        logger.info(f"Cross-source dedupe: dropped {dropped} duplicate stories")
+    return kept
+
+
 _URL_DATE_RE = re.compile(r"/(20\d\d)/(\d{1,2})/(\d{1,2})/")
 
 
@@ -99,6 +139,7 @@ def _fetch_rss(source: dict, window: tuple[datetime, datetime]) -> list[dict]:
         urls = urls + [source["rss_url_alt"]]
 
     start, end = window
+    suffix = source.get("strip_suffix")
     articles: list[dict] = []
     seen_urls: set[str] = set()
     stale_count = 0
@@ -106,13 +147,15 @@ def _fetch_rss(source: dict, window: tuple[datetime, datetime]) -> list[dict]:
 
     for url in urls:
         try:
-            feed = feedparser.parse(url)
+            feed = feedparser.parse(url, agent="Mozilla/5.0 (compatible; NewsBot/1.0)")
             if feed.bozo and not feed.entries:
                 logger.warning(f"RSS unparseable for {source['name']} ({url})")
                 continue
 
             for entry in feed.entries:
                 title = _strip_html(entry.get("title", "")).strip()
+                if suffix and title.endswith(suffix):
+                    title = title[: -len(suffix)].strip()
                 link = entry.get("link", "")
                 if not title or not link or link in seen_urls:
                     continue
@@ -264,4 +307,6 @@ def fetch_all_articles() -> list[dict]:
         all_articles.extend(articles)
 
     logger.info(f"Total articles collected: {len(all_articles)}")
+    all_articles = _dedupe_cross_source(all_articles)
+    logger.info(f"After cross-source dedupe: {len(all_articles)} articles")
     return all_articles
