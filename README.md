@@ -1,255 +1,56 @@
 # 🗞️ Newspaper Agent
 
-> **An autonomous AI-powered daily news digest system** that scrapes top headlines from international and Bangladeshi news sources, ranks them with Google Gemini AI, generates professional summaries, and delivers a beautifully designed HTML email — fully automated, every morning.
+**Your daily news, read and summarized for you — delivered to your inbox every morning.**
+
+Newspaper Agent is an autonomous AI assistant that reads the news so you don't have to. Every morning it gathers the day's top headlines, picks the stories that matter, writes a clear summary of each one, and emails you a clean, beautifully designed digest — automatically, with nothing for you to check or open.
 
 ---
 
-## ✨ What It Does
+## Why we built it
 
-Every day at **9:00 AM (Bangladesh Time)**, this system:
+Staying informed takes time most people don't have. Between dozens of news sites, endless scrolling, and clickbait headlines, simply *finding out what happened* has become a chore.
 
-1. 📡 **Fetches** the latest headlines from Al Jazeera and The Daily Star via RSS
-2. 🖼️ **Scrapes** the actual thumbnail image from each article page
-3. 🤖 **Ranks** the top 5 stories from each source using **Google Gemini 3.5 Flash AI**
-4. ✍️ **Writes** a crisp 2-sentence AI summary for every selected article
-5. 🎨 **Formats** a premium dark-themed HTML email with images, source badges, and color-coded sections
-6. 📬 **Delivers** the digest to all configured recipient inboxes
-
-No dashboards to check. No apps to open. The news comes to you.
+Newspaper Agent solves that. Instead of you visiting multiple news sites every day, one assistant does the reading and hands you the essentials — a two-minute morning briefing that covers both **Bangladesh** and the **wider world**, with equal weight given to each. No apps, no dashboards, no noise.
 
 ---
 
-## 📸 Email Preview
+## What you get
 
-The digest email features:
-- A **premium dark newspaper aesthetic** inspired by high-end editorial design
-- **Gold accents** for international news (Al Jazeera) and **cyan accents** for Bangladeshi news (Daily Star)
-- **Article thumbnail images** pulled directly from each news source
-- **AI-written 2-sentence summaries** for every story — not just raw RSS descriptions
-- A `READ STORY →` link on every card for one-click access
+Every morning, a single email lands in your inbox containing:
 
----
+- **The day's most important stories**, chosen by AI from both international and Bangladeshi news — never yesterday's leftovers or stale articles.
+- **A short, clear summary of each story**, written in plain language so you understand what happened at a glance — no need to click through.
+- **The original article image and a one-click link**, in case you want the full story.
+- **A balanced view** — half the briefing is global news, half is local Bangladesh news, so you're never caught only seeing one side of the world.
+- **A polished, easy-to-read design** that feels like a premium morning newspaper, not a wall of text.
 
-## 🗂️ Project Structure
-
-```
-Newspaper Agent/
-│
-├── main.py                  # Entry point — orchestrates the 5-step pipeline
-├── config.py                # Environment variable loading & news source definitions
-├── requirements.txt         # Python dependencies
-│
-├── agent/
-│   ├── scraper.py           # RSS fetching + parallel og:image extraction
-│   ├── ranker.py            # Gemini AI article ranking (equal split per source)
-│   ├── summarizer.py        # Gemini AI batch summary generation
-│   ├── formatter.py         # Premium HTML email template builder
-│   └── sender.py            # Gmail SMTP delivery
-│
-└── .github/
-    └── workflows/
-        └── daily_news.yml   # GitHub Actions — runs every day at 9 AM BST
-```
+The result: you stay genuinely informed in about two minutes a day, without lifting a finger.
 
 ---
 
-## ⚙️ How It Works (Technical Pipeline)
+## How the automation works
 
-```
-RSS Feeds
-    │
-    ▼
-[scraper.py]  ──── feedparser + parallel requests ────▶  25 raw articles
-                   (og:image scraped for each)
+The whole thing runs by itself. Each morning, behind the scenes, the assistant:
 
-    │
-    ▼
-[ranker.py]   ──── Gemini 3.5 Flash (×2 calls) ────────▶  Top 10 articles
-                   5 from Al Jazeera
-                   5 from Daily Star
+1. **Gathers** the latest headlines from trusted sources — currently **Al Jazeera** (international) and **The Daily Star** (Bangladesh).
+2. **Filters by time** so you only ever see fresh news from the last 24 hours — never recycled or outdated stories.
+3. **Selects the best stories** using AI, giving equal space to local and global news.
+4. **Summarizes each one** into a crisp, readable brief.
+5. **Designs and sends** the finished digest straight to your inbox.
 
-    │
-    ▼
-[summarizer.py] ── Gemini 3.5 Flash (×1 batch call) ──▶  AI summaries for all 10
-
-    │
-    ▼
-[formatter.py]  ── HTML template engine ───────────────▶  Styled email HTML
-
-    │
-    ▼
-[sender.py]     ── Gmail SMTP (smtplib) ────────────────▶  📬 Delivered
-```
+You do nothing. The news simply arrives, ready to read.
 
 ---
 
-## 🚀 Setup Guide
+## The sources
 
-### Prerequisites
-- Python 3.11+
-- A Gmail account (used as the sender — not your primary email)
-- A Google Gemini API key (free at [aistudio.google.com](https://aistudio.google.com/app/apikey))
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/Leon-King10/Newspaper-Agent.git
-cd Newspaper-Agent
-```
-
-### 2. Create a Virtual Environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate        # macOS/Linux
-# venv\Scripts\activate         # Windows
-```
-
-### 3. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment Variables
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and fill in the values:
-
-```env
-SENDER_EMAIL=your.sender@gmail.com
-SENDER_APP_PASSWORD=xxxx xxxx xxxx xxxx
-RECIPIENT_EMAILS=first@gmail.com,second@gmail.com
-GEMINI_API_KEY=AIzaSy...
-GEMINI_MODEL=gemini-3.5-flash
-LOCAL_TIMEZONE=Asia/Dhaka
-```
-
-> **⚠️ Never commit your `.env` file.** It is already listed in `.gitignore`.
-
-#### Getting Your Gmail App Password
-1. Go to [myaccount.google.com](https://myaccount.google.com) → **Security**
-2. Enable **2-Step Verification** if not already on
-3. Search for **"App passwords"**
-4. Create one — select *Mail* and *Other (custom name)* → type `Newspaper Agent`
-5. Copy the 16-character password into `SENDER_APP_PASSWORD`
-
-### 5. Run Manually
-
-```bash
-python main.py
-```
-
-You should see the full 5-step pipeline log and receive the email within ~60 seconds.
-
----
-
-## 🤖 Automation — GitHub Actions
-
-The system runs automatically every day at **9:00 AM Bangladesh Time (3:00 AM UTC)** via GitHub Actions. It can also be triggered manually from the **Actions tab** in GitHub.
-
-### Setting Up Secrets
-
-In your GitHub repository, go to **Settings → Secrets and variables → Actions → New repository secret** and add:
-
-| Secret Name | Value |
+| Source | Coverage |
 |---|---|
-| `SENDER_EMAIL` | Your sender Gmail address |
-| `SENDER_APP_PASSWORD` | The 16-character Gmail App Password |
-| `RECIPIENT_EMAILS` | Comma-separated recipient emails |
-| `GEMINI_API_KEY` | Your Google AI Studio API key |
-| `GEMINI_MODEL` | `gemini-3.5-flash` |
+| **Al Jazeera** | International news |
+| **The Daily Star** | Bangladesh news |
 
-Once secrets are set, every morning the GitHub-hosted runner will execute the full pipeline at no cost (within GitHub's free tier limits).
+Every digest is built on a **50 / 50 balance** — equal representation of local and world news in every single edition. More sources can be added over time as your interests grow.
 
 ---
 
-## 📰 News Sources
-
-Currently configured in `config.py`:
-
-| Source | Coverage | Articles Fetched | AI-Selected |
-|---|---|---|---|
-| **Al Jazeera** | International news | 15 | Top 5 |
-| **The Daily Star** | Bangladesh news | 10 | Top 5 |
-
-The system is designed for **equal representation** — exactly 50% international, 50% Bangladeshi news in every digest.
-
-### Adding a New Source
-
-Open `config.py` and add a new entry to `NEWS_SOURCES`:
-
-```python
-{
-    "name": "Prothom Alo",
-    "rss_url": "https://www.prothomalo.com/feed",
-    "site_url": "https://www.prothomalo.com/",
-    "enabled": True,
-},
-```
-
-The ranker automatically recalculates the equal-slot split when a new source is added. With 3 sources and `TOP_N = 10`, it would be ~3-4 articles per source.
-
----
-
-## 🔧 Configuration Reference
-
-All settings live in `config.py` and can be overridden via environment variables:
-
-| Variable | Default | Description |
-|---|---|---|
-| `SENDER_EMAIL` | *(required)* | Gmail address used to send |
-| `SENDER_APP_PASSWORD` | *(required)* | Gmail App Password |
-| `RECIPIENT_EMAILS` | *(required)* | Comma-separated recipients |
-| `GEMINI_API_KEY` | *(required)* | Google AI Studio API key |
-| `GEMINI_MODEL` | `gemini-3.5-flash` | Gemini model to use |
-| `LOCAL_TIMEZONE` | `Asia/Dhaka` | Timezone shown in email header |
-| `TOP_N` | `10` | Total articles in each digest |
-| `ARTICLES_PER_SOURCE` | `15` | Max articles fetched per source |
-
----
-
-## 📦 Dependencies
-
-| Package | Purpose |
-|---|---|
-| `feedparser` | Parses RSS feeds from news sources |
-| `requests` + `beautifulsoup4` | Fetches article pages to extract `og:image` |
-| `google-genai` | Google Gemini AI SDK for ranking & summarization |
-| `python-dotenv` | Loads `.env` file into environment |
-| `newspaper3k` | HTML fallback scraper (if RSS fails) |
-| `lxml` / `lxml_html_clean` | HTML parsing dependencies |
-
----
-
-## 🛡️ Security Notes
-
-- Credentials are stored as **GitHub Secrets** — never in the codebase
-- The `.env` file is excluded from git via `.gitignore`
-- Gmail App Passwords are scoped to this app only and can be revoked at any time
-- The sender email is a dedicated non-primary account — your main Gmail is never exposed
-
----
-
-## 🗺️ Roadmap / Possible Enhancements
-
-- [ ] Add more Bangladeshi sources (Prothom Alo, bdnews24, The Business Standard)
-- [ ] WhatsApp delivery via CallMeBot in addition to email
-- [ ] Topic filtering (e.g., only business, only sports)
-- [ ] Weekly digest mode
-- [ ] Web dashboard to view past digests
-- [ ] Sentiment analysis per article
-
----
-
-## 👤 Author
-
-**Samiul Azim**  
-Built with Python, Google Gemini AI, and GitHub Actions.
-
----
-
-*This project is private and proprietary. All rights reserved.*
+*Built by Samiul Azim. Private and proprietary — all rights reserved.*
