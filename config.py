@@ -25,17 +25,28 @@ LOCAL_TIMEZONE = os.getenv("LOCAL_TIMEZONE", "Asia/Dhaka")
 TOP_N = 10
 ARTICLES_PER_SOURCE = 15
 
+# Daily window: include news published from this hour yesterday until this hour today
+# (e.g. 9 → [yesterday 09:00, today 09:00) in LOCAL_TIMEZONE). Articles outside the
+# window — including stale/cached feed entries — are discarded.
+NEWS_WINDOW_START_HOUR = 9
+
 NEWS_SOURCES = [
     {
         "name": "Al Jazeera",
-        "rss_url": "https://www.aljazeera.com/xml/rss/all.xml",
+        "rss_urls": ["https://www.aljazeera.com/xml/rss/all.xml"],
         "site_url": "https://www.aljazeera.com/",
         "enabled": True,
     },
     {
         "name": "Daily Star",
-        "rss_url": "https://www.thedailystar.net/frontpage/rss.xml",
-        "rss_url_alt": "https://www.thedailystar.net/rss.xml",
+        # NOTE: frontpage/rss.xml is dead (frozen at 2022) — do not use it.
+        # These category feeds are live and merged together.
+        "rss_urls": [
+            "https://www.thedailystar.net/news/bangladesh/rss.xml",
+            "https://www.thedailystar.net/business/rss.xml",
+            "https://www.thedailystar.net/sports/rss.xml",
+            "https://www.thedailystar.net/rss.xml",
+        ],
         "site_url": "https://www.thedailystar.net/",
         "enabled": True,
     },

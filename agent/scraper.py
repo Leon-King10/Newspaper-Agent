@@ -1,11 +1,43 @@
+import calendar
 import logging
 import re
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
 import feedparser
 import requests
 from bs4 import BeautifulSoup
 import config
 
 logger = logging.getLogger(__name__)
+
+
+def _news_window() -> tuple[datetime, datetime]:
+    """Return (start, end) UTC datetimes for the daily news window.
+
+    Window is [yesterday HH:00, today HH:00) in LOCAL_TIMEZONE, where HH is
+    config.NEWS_WINDOW_START_HOUR. Anchored to the local day, so a job that
+    runs late (e.g. a delayed GitHub Actions run after 9 AM) still produces
+    the same fixed window of content.
+    """
+    tz = ZoneInfo(config.LOCAL_TIMEZONE)
+    now = datetime.now(tz)
+    end_local = now.replace(
+        hour=config.NEWS_WINDOW_START_HOUR, minute=0, second=0, microsecond=0
+    )
+    start_local = end_local - timedelta(days=1)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
+def _entry_datetime(entry) -> datetime | None:
+    """Parse an RSS entry's publish time into an aware UTC datetime, or None."""
+    parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+    if not parsed:
+        return None
+    try:
+        return datetime.fromtimestamp(calendar.timegm(parsed), tz=timezone.utc)
+    except (ValueError, OverflowError, TypeError):
+        return None
 
 
 def _strip_html(text: str) -> str:
@@ -31,59 +63,78 @@ def _fetch_og_image(url: str) -> str:
     return ""
 
 
-def _fetch_rss(source: dict) -> list[dict]:
-    urls = [source["rss_url"]]
-    if "rss_url_alt" in source:
-        urls.append(source["rss_url_alt"])
+def _fetch_rss(source: dict, window: tuple[datetime, datetime]) -> list[dict]:
+    urls = source.get("rss_urls") or [source["rss_url"]]
+    if source.get("rss_url_alt"):
+        urls = urls + [source["rss_url_alt"]]
+
+    start, end = window
+    articles: list[dict] = []
+    seen_urls: set[str] = set()
+    stale_count = 0
+    undated_count = 0
 
     for url in urls:
         try:
             feed = feedparser.parse(url)
             if feed.bozo and not feed.entries:
-                continue
-            if len(feed.entries) < 5:
+                logger.warning(f"RSS unparseable for {source['name']} ({url})")
                 continue
 
-            entries = feed.entries[: config.ARTICLES_PER_SOURCE]
-
-            # Build base article dicts first
-            articles = []
-            for entry in entries:
+            for entry in feed.entries:
                 title = _strip_html(entry.get("title", "")).strip()
-                summary = _strip_html(entry.get("summary") or entry.get("description") or "")
-                if not title:
+                link = entry.get("link", "")
+                if not title or not link or link in seen_urls:
                     continue
+
+                published = _entry_datetime(entry)
+                if published is None:
+                    undated_count += 1
+                    continue
+                if not (start <= published < end):
+                    stale_count += 1
+                    continue
+
+                seen_urls.add(link)
+                summary = _strip_html(entry.get("summary") or entry.get("description") or "")
                 articles.append(
                     {
                         "title": title,
                         "summary": summary[:300],
-                        "url": entry.get("link", ""),
+                        "url": link,
                         "source_name": source["name"],
+                        "published": published,
                         "image_url": "",  # filled below
                     }
                 )
-
-            # Fetch og:image for all articles in parallel
-            if articles:
-                from concurrent.futures import ThreadPoolExecutor, as_completed
-                article_urls = [a["url"] for a in articles]
-                with ThreadPoolExecutor(max_workers=8) as pool:
-                    futures = {pool.submit(_fetch_og_image, u): i for i, u in enumerate(article_urls)}
-                    for future in as_completed(futures):
-                        idx = futures[future]
-                        try:
-                            articles[idx]["image_url"] = future.result()
-                        except Exception:
-                            pass
-                logger.info(f"RSS OK — {source['name']}: {len(articles)} articles from {url}")
-                imgs = sum(1 for a in articles if a["image_url"])
-                logger.info(f"  Images found: {imgs}/{len(articles)}")
-                return articles
-
         except Exception as e:
             logger.warning(f"RSS failed for {source['name']} ({url}): {e}")
 
-    return []
+    # Newest first, then cap per source
+    articles.sort(key=lambda a: a["published"], reverse=True)
+    articles = articles[: config.ARTICLES_PER_SOURCE]
+
+    logger.info(
+        f"RSS — {source['name']}: {len(articles)} in-window articles "
+        f"(dropped {stale_count} out-of-window, {undated_count} undated)"
+    )
+
+    # Fetch og:image for all articles in parallel
+    if articles:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        article_urls = [a["url"] for a in articles]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = {pool.submit(_fetch_og_image, u): i for i, u in enumerate(article_urls)}
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    articles[idx]["image_url"] = future.result()
+                except Exception:
+                    pass
+        imgs = sum(1 for a in articles if a["image_url"])
+        logger.info(f"  Images found: {imgs}/{len(articles)}")
+
+    return articles
 
 
 def _fetch_html(source: dict) -> list[dict]:
@@ -109,12 +160,28 @@ def _fetch_html(source: dict) -> list[dict]:
                         "summary": (article.text or "")[:300],
                         "url": article.url,
                         "source_name": source["name"],
+                        "image_url": "",
                     }
                 )
             except Exception:
                 continue
 
         logger.info(f"HTML fallback — {source['name']}: {len(articles)} articles")
+
+        if articles:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            article_urls = [a["url"] for a in articles]
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = {pool.submit(_fetch_og_image, u): i for i, u in enumerate(article_urls)}
+                for future in as_completed(futures):
+                    idx = futures[future]
+                    try:
+                        articles[idx]["image_url"] = future.result()
+                    except Exception:
+                        pass
+            imgs = sum(1 for a in articles if a["image_url"])
+            logger.info(f"  Images found: {imgs}/{len(articles)}")
+
         return articles
 
     except Exception as e:
@@ -123,14 +190,22 @@ def _fetch_html(source: dict) -> list[dict]:
 
 
 def fetch_all_articles() -> list[dict]:
+    window = _news_window()
+    tz = ZoneInfo(config.LOCAL_TIMEZONE)
+    logger.info(
+        "News window (local): "
+        f"{window[0].astimezone(tz):%Y-%m-%d %H:%M} → "
+        f"{window[1].astimezone(tz):%Y-%m-%d %H:%M} {config.LOCAL_TIMEZONE}"
+    )
+
     all_articles = []
     for source in config.NEWS_SOURCES:
         if not source.get("enabled"):
             continue
 
-        articles = _fetch_rss(source)
+        articles = _fetch_rss(source, window)
         if not articles:
-            logger.warning(f"RSS returned nothing for {source['name']}, trying HTML fallback")
+            logger.warning(f"No in-window RSS articles for {source['name']}, trying HTML fallback")
             articles = _fetch_html(source)
 
         all_articles.extend(articles)

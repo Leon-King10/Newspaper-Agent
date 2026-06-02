@@ -2,7 +2,13 @@ name: Daily News Digest
 
 on:
   schedule:
-    - cron: "0 3 * * *"  # 9:00 AM Asia/Dhaka = 3:00 AM UTC
+    # 02:42 UTC = 8:42 AM Asia/Dhaka. Scheduled a bit before 9 AM, on an
+    # off-peak minute (top-of-hour crons sit in GitHub's most congested queue
+    # and routinely slip 15 min–1 hr+). GitHub does NOT guarantee on-time runs;
+    # for punctual delivery, run `python main.py` from a real cron on a VPS.
+    # The news window is fixed to 9 AM→9 AM regardless of send time, so a late
+    # run still contains exactly the right day's news.
+    - cron: "42 2 * * *"
   workflow_dispatch:       # Allows manual trigger from GitHub Actions tab
 
 jobs:
