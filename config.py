@@ -22,7 +22,7 @@ GEMINI_API_KEY = _require("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 LOCAL_TIMEZONE = os.getenv("LOCAL_TIMEZONE", "Asia/Dhaka")
 
-TOP_N = 20            # 4 sources × top 5 each
+TOP_N = 15            # 3 sources × top 5 each
 ARTICLES_PER_SOURCE = 15
 
 # Daily window: include news published from this hour yesterday until this hour today
@@ -35,18 +35,6 @@ NEWS_SOURCES = [
         "name": "Al Jazeera",
         "rss_urls": ["https://www.aljazeera.com/xml/rss/all.xml"],
         "site_url": "https://www.aljazeera.com/",
-        "enabled": True,
-    },
-    {
-        "name": "Reuters",
-        # Reuters shut down all of its own public RSS feeds. We source Reuters
-        # headlines via Google News (scoped to reuters.com), which provides live
-        # dates and a thumbnail. Google News appends " - Reuters" to each title.
-        "rss_urls": [
-            "https://news.google.com/rss/search?q=site:reuters.com+when:2d&hl=en-US&gl=US&ceid=US:en",
-        ],
-        "site_url": "https://www.reuters.com/",
-        "strip_suffix": " - Reuters",
         "enabled": True,
     },
     {
