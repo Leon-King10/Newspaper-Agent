@@ -4,9 +4,10 @@ import config
 
 
 _SOURCE_STYLES = {
-    "Al Jazeera":  {"color": "#b45309", "label": "International"},
-    "Daily Star":  {"color": "#1d4ed8", "label": "Bangladesh"},
-    "Prothom Alo": {"color": "#15803d", "label": "Bangladesh"},
+    "Al Jazeera":         {"color": "#b45309", "label": "International"},
+    "Daily Star":         {"color": "#1d4ed8", "label": "Bangladesh"},
+    "Prothom Alo":        {"color": "#15803d", "label": "Bangladesh"},
+    "Prothom Alo Sports": {"color": "#ea580c", "label": "Sports"},
 }
 _DEFAULT_STYLE = {"color": "#6b21a8", "label": "News"}
 
@@ -23,7 +24,8 @@ def format_digest(articles: list[dict]) -> tuple[str, str]:
     now = datetime.now(tz)
     date_str = now.strftime("%B %-d, %Y")
     day_str = now.strftime("%A")
-    subject = f"Morning Brief — {date_str}"
+    brief_label = "Morning Brief" if config.brief_type() == "morning" else "Night Brief"
+    subject = f"{brief_label} — {date_str}"
 
     seen_sources: set[str] = set()
     article_cards = ""
@@ -184,7 +186,7 @@ def format_digest(articles: list[dict]) -> tuple[str, str]:
                 line-height: 1;
                 color: #111827;
                 font-family: Georgia, serif;
-              ">Morning Brief</h1>
+              ">{brief_label}</h1>
               <p style="margin: 0; font-size: 13px; color: #9ca3af; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; letter-spacing: 0.3px;">
                 {day_str}, {date_str}
               </p>

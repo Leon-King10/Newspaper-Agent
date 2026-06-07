@@ -13,19 +13,24 @@ logger = logging.getLogger(__name__)
 
 
 def _news_window() -> tuple[datetime, datetime]:
-    """Return (start, end) UTC datetimes for the daily news window.
+    """Return (start, end) UTC datetimes for the current brief's news window.
 
-    Window is [yesterday HH:00, today HH:00) in LOCAL_TIMEZONE, where HH is
-    config.NEWS_WINDOW_START_HOUR. Anchored to the local day, so a job that
-    runs late (e.g. a delayed GitHub Actions run after 9 AM) still produces
-    the same fixed window of content.
+    Morning brief  → [yesterday 09:00, today 09:00)  (fixed 24-hour window)
+    Night brief    → [today 09:00, now)               (captures the day's new articles)
+
+    Both windows are expressed in LOCAL_TIMEZONE then converted to UTC.
     """
     tz = ZoneInfo(config.LOCAL_TIMEZONE)
     now = datetime.now(tz)
-    end_local = now.replace(
+    morning_anchor = now.replace(
         hour=config.NEWS_WINDOW_START_HOUR, minute=0, second=0, microsecond=0
     )
-    start_local = end_local - timedelta(days=1)
+    if config.brief_type() == "morning":
+        start_local = morning_anchor - timedelta(days=1)
+        end_local = morning_anchor
+    else:
+        start_local = morning_anchor
+        end_local = now
     return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
 

@@ -1,4 +1,6 @@
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,8 +24,14 @@ GEMINI_API_KEY = _require("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 LOCAL_TIMEZONE = os.getenv("LOCAL_TIMEZONE", "Asia/Dhaka")
 
-TOP_N = 15            # 3 sources × top 5 each
+TOP_N = 20            # 4 sources × top 5 each
 ARTICLES_PER_SOURCE = 15
+
+
+def brief_type() -> str:
+    """Return 'morning' or 'night' based on current local hour (< 12 → morning)."""
+    hour = datetime.now(ZoneInfo(LOCAL_TIMEZONE)).hour
+    return "morning" if hour < 12 else "night"
 
 # Daily window: include news published from this hour yesterday until this hour today
 # (e.g. 9 → [yesterday 09:00, today 09:00) in LOCAL_TIMEZONE). Articles outside the
@@ -58,5 +66,10 @@ NEWS_SOURCES = [
         "site_url": "https://www.prothomalo.com/",
         "enabled": True,
     },
-    # To add another source, copy a block here and set enabled=True
+    {
+        "name": "Prothom Alo Sports",
+        "rss_urls": ["https://www.prothomalo.com/sports/feed"],
+        "site_url": "https://www.prothomalo.com/sports/",
+        "enabled": True,
+    },
 ]
