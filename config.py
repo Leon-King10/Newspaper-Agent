@@ -29,9 +29,14 @@ ARTICLES_PER_SOURCE = 15
 
 
 def brief_type() -> str:
-    """Return 'morning' or 'night' based on current local hour (< 12 → morning)."""
+    """Return 'morning' or 'evening' based on current local hour.
+
+    morning  → 12:00 – 17:59  (noon run)
+    evening  → 18:00+          (night run)
+    Anything before noon falls back to 'morning'.
+    """
     hour = datetime.now(ZoneInfo(LOCAL_TIMEZONE)).hour
-    return "morning" if hour < 12 else "night"
+    return "morning" if hour < 18 else "evening"
 
 # Daily window: include news published from this hour yesterday until this hour today
 # (e.g. 9 → [yesterday 09:00, today 09:00) in LOCAL_TIMEZONE). Articles outside the
@@ -68,7 +73,9 @@ NEWS_SOURCES = [
     },
     {
         "name": "Prothom Alo Sports",
-        "rss_urls": ["https://www.prothomalo.com/sports/feed"],
+        # /sports/feed 404s — use the main feed and filter to /sports/ URLs only
+        "rss_urls": ["https://www.prothomalo.com/feed"],
+        "url_filter": "/sports/",
         "site_url": "https://www.prothomalo.com/sports/",
         "enabled": True,
     },

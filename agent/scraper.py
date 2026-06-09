@@ -150,6 +150,8 @@ def _fetch_rss(source: dict, window: tuple[datetime, datetime]) -> list[dict]:
     stale_count = 0
     undated_count = 0
 
+    url_filter = source.get("url_filter", "")
+
     for url in urls:
         try:
             feed = feedparser.parse(url, agent="Mozilla/5.0 (compatible; NewsBot/1.0)")
@@ -163,6 +165,8 @@ def _fetch_rss(source: dict, window: tuple[datetime, datetime]) -> list[dict]:
                     title = title[: -len(suffix)].strip()
                 link = entry.get("link", "")
                 if not title or not link or link in seen_urls:
+                    continue
+                if url_filter and url_filter not in link:
                     continue
 
                 published = _entry_datetime(entry)

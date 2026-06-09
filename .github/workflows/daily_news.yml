@@ -2,11 +2,11 @@ name: Daily News Digest
 
 on:
   schedule:
-    # Run 1: 02:42 UTC = ~8:42 AM Asia/Dhaka (morning edition)
-    # Run 2: 13:12 UTC = ~7:12 PM Asia/Dhaka (evening edition, ~10.5 hrs later)
+    # Run 1: 06:00 UTC = 12:00 PM Asia/Dhaka (Morning Brief)
+    # Run 2: 13:12 UTC = ~7:12 PM Asia/Dhaka (Evening Brief)
     # Off-peak minutes avoid GitHub's congested queue. Runs may still slip.
     # The news window is fixed to 9 AM→9 AM so late runs still get the right day's news.
-    - cron: "42 2 * * *"
+    - cron: "0 6 * * *"
     - cron: "12 13 * * *"
   workflow_dispatch:       # Allows manual trigger from GitHub Actions tab
 

@@ -24,7 +24,7 @@ def format_digest(articles: list[dict]) -> tuple[str, str]:
     now = datetime.now(tz)
     date_str = now.strftime("%B %-d, %Y")
     day_str = now.strftime("%A")
-    brief_label = "Morning Brief" if config.brief_type() == "morning" else "Night Brief"
+    brief_label = "Morning Brief" if config.brief_type() == "morning" else "Evening Brief"
     subject = f"{brief_label} — {date_str}"
 
     seen_sources: set[str] = set()
